@@ -1,0 +1,16 @@
+node_modules/
+dist/
+__pycache__/
+*.pyc
+backend/kisan.db
+backend/uploads/
+.env
+.DS_Store
+frontend/node_modules/
+frontend/.npm-cache/
+frontend/dist/
+backend/__pycache__/
+backend/uploads/
+backend/kisan.db
+PlantVillage/
+*.pth
