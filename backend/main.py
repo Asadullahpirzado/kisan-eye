@@ -327,3 +327,13 @@ async def dashboard(current_user=Depends(get_current_user)):
         "recent_cases": all_cases[:6],
         "crops": crop_summary,
     }
+
+# Serve React Frontend
+import os
+from fastapi.responses import FileResponse
+frontend_dist = os.path.join(os.path.dirname(__file__), 'static')
+if os.path.exists(frontend_dist):
+    app.mount('/', StaticFiles(directory=frontend_dist, html=True), name='frontend')
+    @app.exception_handler(404)
+    async def not_found(request, exc):
+        return FileResponse(os.path.join(frontend_dist, 'index.html'))
