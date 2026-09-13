@@ -123,7 +123,11 @@ def _is_leaf_healthy(ratios):
     # Only call healthy if >40% green AND <10% damage
     return green > 0.40 and damage < 0.10
 
-
+def _find_healthy_candidate(candidates):
+    for c in candidates:
+        if "healthy" in c.lower():
+            return c
+    return candidates[-1] if candidates else "healthy"
 
 def predict(image_path, crop):
     img = Image.open(image_path).convert("RGB")

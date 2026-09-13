@@ -14,10 +14,22 @@ def anyio_backend():
     return "asyncio"
 
 
+from backend.database import init_db
+
 @pytest_asyncio.fixture(scope="module")
 async def client():
+    # Remove old test DB if exists
+    if os.path.exists("./test_kisan.db"):
+        os.remove("./test_kisan.db")
+        
+    await init_db()
+    
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
+        
+    # Cleanup after tests
+    if os.path.exists("./test_kisan.db"):
+        os.remove("./test_kisan.db")
 
 
 @pytest.mark.anyio
