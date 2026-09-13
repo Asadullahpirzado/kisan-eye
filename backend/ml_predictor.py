@@ -2,22 +2,14 @@ from PIL import Image
 import numpy as np
 import os
 
-import os
-import json
-import os
-import json
+import requests
+import base64
 
 try:
-    import google.generativeai as genai
-    # Setup Gemini API (if key is provided in .env)
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-    if GEMINI_API_KEY:
-        genai.configure(api_key=GEMINI_API_KEY)
-        vision_model = genai.GenerativeModel('gemini-1.5-flash')
-    else:
-        vision_model = None
-except ImportError:
-    vision_model = None
+except Exception:
+    GEMINI_API_KEY = None
+
 
 
 DISEASE_LIBRARY = {
@@ -99,7 +91,12 @@ def _color_ratios(img):
 def _score_disease(disease, ratios):
     d_lower = disease.lower()
     if "healthy" in d_lower:
-        return max(0.05, ratios["green"] - ratios["brown"] - ratios["dark_spot"] - ratios["yellow"])
+        # Only score high if leaf is actually healthy — mostly green, low damage
+        damage = ratios["brown"] + ratios["dark_spot"] + ratios["yellow"] + ratios["orange"]
+        if damage > 0.10:
+            return 0.01  # Severely penalize "healthy" when damage is visible
+        return max(0.01, ratios["green"] - damage)
+
     if "early_blight" in d_lower or "late_blight" in d_lower:
         return ratios["brown"] * 1.6 + ratios["dark_spot"] * 1.2 + ratios["yellow"] * 0.3
     if "septoria" in d_lower:
@@ -119,17 +116,55 @@ def _score_disease(disease, ratios):
     return 0.05
 
 
+def _is_leaf_healthy(ratios):
+    """A leaf is only truly healthy if it's mostly green with minimal damage markers."""
+    green = ratios["green"]
+    damage = ratios["brown"] + ratios["dark_spot"] + ratios["yellow"] + ratios["orange"]
+    # Only call healthy if >40% green AND <10% damage
+    return green > 0.40 and damage < 0.10
+
+
+
 def predict(image_path, crop):
     img = Image.open(image_path).convert("RGB")
     ratios = _color_ratios(img)
     candidates = DISEASE_LIBRARY.get(crop, DISEASE_LIBRARY["tomato"])
 
-    # Attempt External API Prediction (Gemini Vision)
-    if vision_model is not None:
+    # Attempt External API Prediction (Gemini Vision via REST)
+    if GEMINI_API_KEY is not None:
         try:
-            prompt = f"Analyze this leaf image of a {crop} crop. Tell me if it is healthy or diseased. If diseased, identify the most likely disease from this list: {candidates}. Respond with only the exact name of the disease from the list, or 'healthy' if it looks healthy."
-            response = vision_model.generate_content([prompt, img])
-            api_result = response.text.strip()
+            prompt = (
+                f"Look at this {crop} leaf image carefully. "
+                f"Does it show ANY signs of disease, discoloration, spots, blight, lesions, or damage? "
+                f"If YES, which disease from this list best matches: {candidates}. "
+                f"If the leaf looks completely healthy with NO damage, respond with the word 'healthy'. "
+                f"Respond with ONLY the exact disease name from the list above, nothing else."
+            )
+            
+            with open(image_path, "rb") as image_file:
+                base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+                
+            payload = {
+                "contents": [{
+                    "parts": [
+                        {"text": prompt},
+                        {
+                            "inline_data": {
+                                "mime_type": "image/jpeg",
+                                "data": base64_image
+                            }
+                        }
+                    ]
+                }]
+            }
+            
+            headers = {"Content-Type": "application/json"}
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={GEMINI_API_KEY}"
+            
+            response = requests.post(url, json=payload, headers=headers, timeout=15)
+            response.raise_for_status()
+            
+            api_result = response.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
             
             # Match the API result to our candidates
             matched_disease = None
@@ -138,8 +173,9 @@ def predict(image_path, crop):
                     matched_disease = c
                     break
             
+            # Fix: find the correct healthy candidate by name, not last item
             if not matched_disease and "healthy" in api_result.lower():
-                matched_disease = candidates[-1] if candidates else "healthy"
+                matched_disease = _find_healthy_candidate(candidates)
 
             if matched_disease:
                 affected_area = round(min(0.9, ratios["brown"] + ratios["dark_spot"] + ratios["orange"]) * 100, 1)
@@ -147,23 +183,46 @@ def predict(image_path, crop):
                     "disease": matched_disease,
                     "label": DISEASE_INFO.get(matched_disease, DISEASE_INFO["healthy"])["label"],
                     "summary": DISEASE_INFO.get(matched_disease, DISEASE_INFO["healthy"])["summary"],
-                    "confidence": 92.5, # High confidence for API
+                    "confidence": 92.5,
                     "affected_area": affected_area,
                     "alternatives": [],
                 }
         except Exception as e:
             print(f"External API Prediction failed, falling back to heuristic: {e}")
 
-    # Fallback heuristic
-    raw_scores = {d: _score_disease(d, ratios) for d in candidates}
+    # ── Smart Fallback Heuristic ──────────────────────────────────────────────
+    # Calculate total visible damage on the leaf
+    damage = ratios["brown"] + ratios["dark_spot"] + ratios["yellow"] + ratios["orange"]
+    green  = ratios["green"]
+
+    # A leaf is ONLY healthy if it is mostly green AND has very low damage
+    # Otherwise force disease detection by removing healthy from candidates
+    leaf_is_healthy = green > 0.45 and damage < 0.08
+
+    if leaf_is_healthy:
+        # Truly healthy leaf — score all candidates normally
+        scoring_candidates = candidates
+    else:
+        # Diseased leaf — remove healthy candidates so we NEVER wrongly say healthy
+        scoring_candidates = [d for d in candidates if "healthy" not in d.lower()]
+        if not scoring_candidates:
+            scoring_candidates = candidates  # fallback safety
+
+    raw_scores = {d: _score_disease(d, ratios) for d in scoring_candidates}
     total = sum(raw_scores.values()) or 1.0
-    normalised = {d: raw_scores[d] / total for d in candidates}
+    normalised = {d: raw_scores[d] / total for d in scoring_candidates}
 
     ranked = sorted(normalised.items(), key=lambda pair: pair[1], reverse=True)
     top_disease, top_score = ranked[0]
 
-    confidence = round(min(0.97, max(0.30, 0.55 + top_score * 0.9)) * 100, 1)
-    affected_area = round(min(0.9, ratios["brown"] + ratios["dark_spot"] + ratios["orange"]) * 100, 1)
+    # Confidence reflects how much damage was found
+    if not leaf_is_healthy:
+        # Damage found — confidence scales with damage level
+        confidence = round(min(95.0, max(55.0, 55.0 + damage * 300)), 1)
+    else:
+        confidence = round(min(0.97, max(0.30, 0.55 + top_score * 0.9)) * 100, 1)
+
+    affected_area = round(min(90.0, damage * 100), 1)
 
     alternatives = [
         {"disease": d, "label": DISEASE_INFO[d]["label"], "confidence": round(score * 100, 1)}

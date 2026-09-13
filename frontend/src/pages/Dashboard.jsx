@@ -2,6 +2,15 @@ import { useEffect, useState } from "react";
 import { getDashboard, fileUrl } from "../api.js";
 import StatCard from "../components/StatCard.jsx";
 import RiskBadge from "../components/RiskBadge.jsx";
+import { MapContainer, TileLayer, Marker, Popup, Circle } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
+
+// Fix Leaflet marker icons not showing in React
+import L from "leaflet";
+import icon from "leaflet/dist/images/marker-icon.png";
+import iconShadow from "leaflet/dist/images/marker-shadow.png";
+let DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconAnchor: [12, 41] });
+L.Marker.prototype.options.icon = DefaultIcon;
 
 export default function Dashboard({ onNavigate }) {
   const [data, setData] = useState(null);
@@ -36,6 +45,32 @@ export default function Dashboard({ onNavigate }) {
         <StatCard label="Healthy" value={data.healthy} accent="text-leaf" />
         <StatCard label="Needs monitoring" value={data.monitoring} accent="text-amber" />
         <StatCard label="High risk" value={data.high_risk} accent="text-danger" />
+      </div>
+
+      <div className="mb-10 rounded-2xl overflow-hidden border border-forest/10 shadow-sm relative z-0">
+        <div className="bg-forest text-white px-5 py-3 flex justify-between items-center">
+          <h2 className="font-semibold">Disease Radar Map</h2>
+          <span className="text-xs bg-danger px-2 py-1 rounded-full animate-pulse">LIVE TRACKING</span>
+        </div>
+        <div style={{ height: "400px", width: "100%" }}>
+          <MapContainer center={[23.0, 79.0]} zoom={6} scrollWheelZoom={false} style={{ height: "100%", width: "100%" }}>
+            <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
+            {data.recent_cases.map(item => item.lat && item.lng && (
+              <Circle 
+                key={item.id} 
+                center={[item.lat, item.lng]} 
+                radius={20000} 
+                pathOptions={{ color: item.risk_level === 'HIGH' ? 'red' : item.risk_level === 'MEDIUM' ? 'orange' : 'green', fillColor: item.risk_level === 'HIGH' ? 'red' : item.risk_level === 'MEDIUM' ? 'orange' : 'green' }}
+              >
+                <Popup>
+                  <strong>{item.crop}</strong><br/>
+                  {item.prediction}<br/>
+                  Risk: {item.risk_level}
+                </Popup>
+              </Circle>
+            ))}
+          </MapContainer>
+        </div>
       </div>
 
       <div className="grid md:grid-cols-2 gap-8">

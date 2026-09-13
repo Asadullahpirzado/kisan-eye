@@ -33,6 +33,8 @@ class Case(Base):
     explanation = Column(String)
     evidence = Column(JSON)
     action_plan = Column(JSON)
+    lat = Column(Float, nullable=True)
+    lng = Column(Float, nullable=True)
     parent_case_id = Column(Integer, ForeignKey("cases.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 

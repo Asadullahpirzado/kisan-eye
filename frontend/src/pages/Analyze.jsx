@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { UploadCloud, ImageOff, RefreshCcw, Camera, ShieldCheck, ScanLine } from "lucide-react";
+import { UploadCloud, ImageOff, RefreshCcw, Camera, ShieldCheck, ScanLine, Leaf, Focus } from "lucide-react";
 import { analyzeImage } from "../api.js";
 
 const CROPS = [
@@ -17,6 +17,7 @@ const STAGES = [
 
 export default function Analyze({ onAnalyzed }) {
   const [crop, setCrop] = useState("tomato");
+  const [scanMode, setScanMode] = useState("leaf"); // "leaf" | "drone"
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [status, setStatus] = useState("idle"); // idle | scanning | error
@@ -98,13 +99,29 @@ export default function Analyze({ onAnalyzed }) {
             onClick={() => setCrop(c.id)}
             className={`px-5 py-2.5 rounded-full text-sm font-medium border transition-colors ${
               crop === c.id
-                ? "bg-leaf text-white border-leaf"
-                : "border-forest/15 text-forest/70 hover:border-forest/30"
+                ? "bg-forest border-forest text-white"
+                : "bg-white border-forest/20 text-forest hover:bg-forest/5"
             }`}
           >
             {c.label}
           </button>
         ))}
+      </div>
+
+      {/* Drone Mode Toggle */}
+      <div className="flex items-center bg-forest/5 rounded-xl p-1 mb-8 max-w-sm">
+        <button 
+          onClick={() => setScanMode("leaf")}
+          className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-lg transition-all ${scanMode === "leaf" ? "bg-white shadow-sm text-forest" : "text-forest/60 hover:text-forest"}`}
+        >
+          <Leaf size={16} /> Single Leaf
+        </button>
+        <button 
+          onClick={() => setScanMode("drone")}
+          className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-lg transition-all ${scanMode === "drone" ? "bg-forest shadow-sm text-white" : "text-forest/60 hover:text-forest"}`}
+        >
+          <Focus size={16} /> Drone / Aerial
+        </button>
       </div>
 
       {status !== "scanning" && (
@@ -126,12 +143,16 @@ export default function Analyze({ onAnalyzed }) {
               </button>
             </div>
           ) : (
-            <button onClick={() => inputRef.current.click()} className="flex flex-col items-center gap-3 mx-auto" aria-label="Choose a leaf photo">
-              <div className="h-14 w-14 rounded-2xl bg-leaf/10 flex items-center justify-center">
-                <UploadCloud className="text-leaf" size={26} />
+            <button onClick={() => inputRef.current.click()} className="w-full" aria-label="Choose a leaf photo">
+              <div className="flex flex-col items-center p-8 text-center text-forest/50 hover:text-forest transition-colors h-[260px] justify-center border border-dashed border-forest/20 rounded-3xl mx-2 my-2 bg-white/50">
+                <UploadCloud className="mb-4 text-leaf" size={40} />
+                <p className="font-semibold text-forest mb-1">
+                  {scanMode === 'drone' ? 'Upload aerial drone photo' : 'Drag leaf photo here'}
+                </p>
+                <p className="text-sm px-4">
+                  {scanMode === 'drone' ? 'Supports JPG, PNG (Max 10MB)' : 'or click to browse from your device'}
+                </p>
               </div>
-              <span className="font-semibold text-forest">Upload a crop image</span>
-              <span className="text-sm text-forest/50">Tap to browse, or drag a photo here · JPG, PNG up to 10 MB</span>
             </button>
           )}
           <input
@@ -163,10 +184,37 @@ export default function Analyze({ onAnalyzed }) {
 
       {status === "scanning" && (
         <div className="rounded-3xl bg-white p-8 border border-forest/10">
-          <div className="relative rounded-2xl overflow-hidden aspect-video bg-forest/5 mb-6">
-            {preview && <img src={preview} alt="" className="w-full h-full object-cover opacity-80" />}
-            <div className="absolute left-0 right-0 h-1 bg-signal scan-line" />
+          <div className="relative overflow-hidden rounded-3xl bg-forest/5 aspect-square border border-forest/10 shadow-sm mb-6">
+            <img src={preview} alt="Crop preview" className="w-full h-full object-cover" />
+            
+            <div className="absolute inset-0 bg-forest/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center">
+              <div className="relative mb-6">
+                {scanMode === 'drone' ? (
+                  <div className="w-32 h-32 border-2 border-leaf rounded-xl relative overflow-hidden flex items-center justify-center">
+                    <Focus className="text-leaf absolute opacity-20" size={64} />
+                    <div className="absolute inset-0 bg-[linear-gradient(transparent_95%,rgba(132,204,22,0.8)_100%)] bg-[length:100%_200%] animate-[scan_2s_linear_infinite]" />
+                    <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent_95%,rgba(132,204,22,0.8)_100%)] bg-[length:200%_100%] animate-[scan-h_2s_linear_infinite]" />
+                  </div>
+                ) : (
+                  <div className="h-20 w-20 rounded-full border-4 border-leaf/20 border-t-leaf animate-spin" />
+                )}
+              </div>
+              
+              <h2 className="text-xl font-bold text-white mb-2">
+                {scanMode === 'drone' ? 'Analyzing field sectors...' : 'Analyzing pathology...'}
+              </h2>
+              <p className="text-white/70 text-sm max-w-[200px]">
+                {STAGES[stageIndex]}
+              </p>
+            </div>
           </div>
+
+          {/* Add custom CSS for drone animation */}
+          <style dangerouslySetInnerHTML={{__html: `
+            @keyframes scan { 0% { background-position: 0 -100%; } 100% { background-position: 0 100%; } }
+            @keyframes scan-h { 0% { background-position: -100% 0; } 100% { background-position: 100% 0; } }
+          `}} />
+
           <div className="space-y-2">
             {STAGES.map((stage, i) => (
               <div key={stage} className="flex items-center gap-3 text-sm">

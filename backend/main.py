@@ -6,6 +6,13 @@ import os
 import uuid
 from datetime import datetime, timedelta
 
+# Load .env file so GEMINI_API_KEY is available
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+except ImportError:
+    pass  # dotenv not installed, rely on system env vars
+
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -217,6 +224,12 @@ async def assess(payload: AssessRequest, current_user=Depends(get_current_user))
     explanation, evidence = agent_engine.build_explanation(payload.prediction, payload.answers, risk_level)
     action_plan = agent_engine.build_action_plan(payload.prediction, risk_level)
 
+    import random
+    # Generate mock coordinates around a central agricultural hub for the demo map
+    base_lat, base_lng = 23.0, 79.0 # Central India
+    lat = base_lat + random.uniform(-2.0, 2.0)
+    lng = base_lng + random.uniform(-2.0, 2.0)
+
     case_id = await database.create_case(
         crop=payload.crop,
         image_path=payload.image_path,
@@ -230,6 +243,8 @@ async def assess(payload: AssessRequest, current_user=Depends(get_current_user))
         explanation=explanation,
         evidence=evidence,
         action_plan=action_plan,
+        lat=lat,
+        lng=lng,
         parent_case_id=payload.parent_case_id,
     )
     return await database.get_case(case_id)

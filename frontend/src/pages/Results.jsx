@@ -3,13 +3,23 @@ import ConfidenceRing from "../components/ConfidenceRing.jsx";
 import RiskBadge from "../components/RiskBadge.jsx";
 import { fileUrl } from "../api.js";
 
+import { useState } from "react";
+
 export default function Results({ caseData, onNavigate }) {
+  const [acres, setAcres] = useState(2);
+  const [val, setVal] = useState(1500);
+  const [cost, setCost] = useState(caseData?.risk_level === 'HIGH' ? 80 : 40);
+
+  const risk_level = caseData?.risk_level || 'LOW';
+  const lossPct = risk_level === 'HIGH' ? 0.4 : risk_level === 'MEDIUM' ? 0.15 : 0.05;
+  const costNum = Number(cost) || 0;
+  const estLoss = (Number(acres) || 0) * (Number(val) || 0) * lossPct;
+  const netSavings = Math.max(0, estLoss - costNum);
   const {
     crop,
     image_path,
     prediction,
     confidence,
-    risk_level,
     explanation,
     evidence,
     action_plan,
@@ -75,6 +85,46 @@ export default function Results({ caseData, onNavigate }) {
               <p className="text-sm text-forest/60 leading-relaxed">{step.detail}</p>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Yield Loss ROI Calculator */}
+      <div className="mt-10 rounded-3xl bg-white border border-forest/10 p-6 md:p-8 shadow-sm">
+        <h3 className="text-xl font-bold text-forest mb-4">Financial Impact & ROI Calculator</h3>
+        <p className="text-sm text-forest/70 mb-6">Estimate your potential losses if this disease is left untreated, and the ROI of taking immediate action.</p>
+        
+        <div className="grid md:grid-cols-2 gap-8">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-forest mb-2">Farm Size (Acres)</label>
+              <input type="number" value={acres} onChange={(e) => setAcres(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-forest/20 bg-forest/5 focus:outline-none focus:border-leaf" />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-forest mb-2">Expected Yield Value per Acre ($)</label>
+              <input type="number" value={val} onChange={(e) => setVal(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-forest/20 bg-forest/5 focus:outline-none focus:border-leaf" />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-forest mb-2">Estimated Treatment Cost ($)</label>
+              <input type="number" value={cost} onChange={(e) => setCost(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-forest/20 bg-forest/5 focus:outline-none focus:border-leaf" />
+            </div>
+          </div>
+          
+          <div className="bg-gradient-to-br from-forest/5 to-forest/10 rounded-2xl p-6 flex flex-col justify-center border border-forest/10">
+            <div className="space-y-4">
+              <div className="flex justify-between items-center border-b border-forest/10 pb-3">
+                <span className="text-forest/70 font-medium">Estimated Loss Without Action ({risk_level === 'HIGH' ? '40%' : risk_level === 'MEDIUM' ? '15%' : '5%'} yield)</span>
+                <span className="text-xl font-bold text-danger">-${estLoss.toFixed(0)}</span>
+              </div>
+              <div className="flex justify-between items-center border-b border-forest/10 pb-3">
+                <span className="text-forest/70 font-medium">Treatment Investment</span>
+                <span className="text-xl font-bold text-forest">-${costNum.toFixed(0)}</span>
+              </div>
+              <div className="flex justify-between items-center pt-2">
+                <span className="font-bold text-forest">Net Savings by Acting Today</span>
+                <span className="text-2xl font-black text-leaf">+${netSavings.toFixed(0)}</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

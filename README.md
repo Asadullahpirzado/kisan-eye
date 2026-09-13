@@ -3,8 +3,8 @@
 **Kisan Eye** is an AI-powered agricultural assistant designed to instantly detect crop diseases, assess risk levels, and provide actionable treatment plans. Built to empower farmers with quick, accurate visual diagnostics using advanced Generative AI and deep learning.
 
 ### 🎥 Demo Video
-> **[Watch the Kisan Eye Demo Video Here](https://youtube.com/your-video-link-here)**  
-*(Note: Replace the link above with your actual YouTube or Google Drive video link!)*
+Watch the full project demo here:  
+[KISAN EYE Demo Video (Google Drive)](https://drive.google.com/file/d/1jFFAPt_0n9HuLaz-yVWPAkkuK0k9hRU_/view?usp=sharing)
 
 ---
 
